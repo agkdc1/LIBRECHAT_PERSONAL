@@ -1,0 +1,7 @@
+sa-key.json
+terraform.tfvars
+terraform.tfstate
+terraform.tfstate.backup
+terraform.tfstate.*.backup
+.terraform/
+.env

@@ -1,0 +1,22 @@
+version: "1.2.1"
+cache: true
+
+interface:
+  endpointsMenu: true
+  modelSelect: true
+  parameters: true
+
+endpoints:
+  google:
+    titleModel: "gemini-3.1-flash-preview"
+    summarize: true
+    summaryModel: "gemini-3.1-flash-preview"
+    models:
+      default:
+        - "gemini-3.1-pro-preview"
+        - "gemini-3.1-flash-preview"
+        - "gemini-3.0-deep-think"
+      fetch: false
+    modelDisplayLabel: "Vertex AI"
+    maxContextTokens: 1048576
+    maxOutputTokens: 65536
