@@ -1,0 +1,9 @@
+project_id      = "your-project-id"
+billing_account = "your-billing-account-id"
+owner_email     = "your-email@gmail.com"
+custom_domain   = "your-subdomain.your-domain.com"
+
+# Pass cloudflare token via CLI:
+#   terraform apply -var="cloudflare_api_token=$(cat /root/cloudflare)"
+# Or set it here (tfvars is gitignored):
+#   cloudflare_api_token = "your-cloudflare-api-token"

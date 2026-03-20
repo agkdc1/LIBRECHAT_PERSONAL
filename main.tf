@@ -1,6 +1,6 @@
 # ==============================================================================
-# LibreChat — GCP Project for Vertex AI API Only
-# Everything else runs locally via Docker + Cloudflare Tunnel
+# LibreChat on GCP — Cloud Run + Vertex AI + MongoDB on GCE
+# Cloudflare Access + Tunnel for auth and ingress, Secret Manager for secrets
 # ==============================================================================
 
 terraform {
@@ -10,12 +10,33 @@ terraform {
       source  = "hashicorp/google"
       version = "~> 6.0"
     }
+    google-beta = {
+      source  = "hashicorp/google-beta"
+      version = "~> 6.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
+    cloudflare = {
+      source  = "cloudflare/cloudflare"
+      version = "~> 4.0"
+    }
   }
 }
 
 provider "google" {
   region = var.region
 }
+
+provider "google-beta" {
+  region = var.region
+}
+
+provider "cloudflare" {
+  api_token = var.cloudflare_api_token
+}
+
 
 # ─── GCP Project ─────────────────────────────────────────────────────────────
 
@@ -24,45 +45,4 @@ resource "google_project" "this" {
   project_id      = var.project_id
   billing_account = var.billing_account
   deletion_policy = "DELETE"
-}
-
-# ─── Enable Vertex AI API ────────────────────────────────────────────────────
-
-resource "google_project_service" "vertex_ai" {
-  project            = google_project.this.project_id
-  service            = "aiplatform.googleapis.com"
-  disable_on_destroy = false
-}
-
-resource "google_project_service" "iam" {
-  project            = google_project.this.project_id
-  service            = "iam.googleapis.com"
-  disable_on_destroy = false
-}
-
-# ─── Service Account (for Vertex AI from local machine) ─────────────────────
-
-resource "google_service_account" "librechat" {
-  account_id   = "librechat-sa"
-  display_name = "LibreChat Local SA"
-  project      = google_project.this.project_id
-  depends_on   = [google_project_service.iam]
-}
-
-resource "google_project_iam_member" "vertex_ai" {
-  project = google_project.this.project_id
-  role    = "roles/aiplatform.user"
-  member  = "serviceAccount:${google_service_account.librechat.email}"
-}
-
-# ─── SA Key (downloaded for local Docker use) ────────────────────────────────
-
-resource "google_service_account_key" "librechat" {
-  service_account_id = google_service_account.librechat.name
-}
-
-resource "local_file" "sa_key" {
-  content         = base64decode(google_service_account_key.librechat.private_key)
-  filename        = "${path.module}/sa-key.json"
-  file_permission = "0600"
 }
