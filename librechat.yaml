@@ -8,14 +8,16 @@ interface:
 
 endpoints:
   google:
-    titleModel: "gemini-3.1-flash-preview"
+    titleModel: "gemini-3-flash-preview"
     summarize: true
-    summaryModel: "gemini-3.1-flash-preview"
+    summaryModel: "gemini-3-flash-preview"
     models:
       default:
         - "gemini-3.1-pro-preview"
-        - "gemini-3.1-flash-preview"
-        - "gemini-3.0-deep-think"
+        - "gemini-3-pro-preview"
+        - "gemini-3-flash-preview"
+        - "gemini-2.5-pro"
+        - "gemini-2.5-flash"
       fetch: false
     modelDisplayLabel: "Vertex AI"
     maxContextTokens: 1048576

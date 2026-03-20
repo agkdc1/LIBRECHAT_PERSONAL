@@ -194,6 +194,26 @@ resource "google_secret_manager_secret_version" "cf_shared_secret" {
   secret_data = random_password.cf_shared_secret.result
 }
 
+# ─── Cloud Run SA key (Vertex AI — LibreChat needs explicit credentials) ──────
+
+resource "google_service_account_key" "cloudrun" {
+  service_account_id = google_service_account.cloudrun.name
+}
+
+resource "google_secret_manager_secret" "cloudrun_sa_key" {
+  secret_id = "cloudrun-sa-key"
+  project   = google_project.this.project_id
+  replication {
+    auto {}
+  }
+  depends_on = [google_project_service.apis["secretmanager.googleapis.com"]]
+}
+
+resource "google_secret_manager_secret_version" "cloudrun_sa_key" {
+  secret      = google_secret_manager_secret.cloudrun_sa_key.id
+  secret_data = base64decode(google_service_account_key.cloudrun.private_key)
+}
+
 resource "google_secret_manager_secret" "librechat_config" {
   secret_id = "librechat-config"
   project   = google_project.this.project_id

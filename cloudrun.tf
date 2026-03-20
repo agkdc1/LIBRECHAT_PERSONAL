@@ -112,10 +112,21 @@ resource "google_cloud_run_v2_service" "librechat" {
         value = "false"
       }
 
-      # Vertex AI: use Application Default Credentials from the Cloud Run SA
+      # Vertex AI: GOOGLE_KEY must be unset so LibreChat loads the service key file
+      # and detects project_id → switches to Vertex AI provider
       env {
-        name  = "GOOGLE_KEY"
-        value = "user_provided"
+        name = "GOOGLE_SERVICE_KEY_FILE"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.cloudrun_sa_key.secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name  = "GOOGLE_LOC"
+        value = "global" # Gemini 3.x preview models require location "global", not a region
       }
 
       # Domain URLs (sensitive var, not in git — only in tfvars + GCP runtime)
@@ -235,6 +246,7 @@ resource "google_cloud_run_v2_service" "librechat" {
     google_secret_manager_secret_version.creds_iv,
     google_secret_manager_secret_version.jwt_secret,
     google_secret_manager_secret_version.jwt_refresh_secret,
+    google_secret_manager_secret_version.cloudrun_sa_key,
   ]
 }
 
