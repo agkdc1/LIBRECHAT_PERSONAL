@@ -19,10 +19,39 @@ resource "google_project_iam_member" "cloudrun_secret_accessor" {
   member  = "serviceAccount:${google_service_account.cloudrun.email}"
 }
 
+# ─── nginx proxy config (validates Cloudflare shared secret) ────────────────
+
+locals {
+  nginx_proxy_conf = <<-NGINX
+    map_hash_bucket_size 128;
+    map $http_x_cf_secret $cf_auth {
+        "${random_password.cf_shared_secret.result}" 1;
+        default     0;
+    }
+    server {
+        listen 8080;
+        location / {
+            if ($cf_auth = 0) {
+                return 403;
+            }
+            proxy_pass http://127.0.0.1:3080;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-CF-Secret "";
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+        }
+    }
+  NGINX
+}
+
 # ─── Cloud Run Service ───────────────────────────────────────────────────────
 #
-# Ingress: all traffic (cloudflared connects via public .run.app URL)
-# Auth gate is Cloudflare Access, not Cloud Run IAM.
+# Ingress: all traffic — nginx sidecar validates X-CF-Secret header.
+# Requests without the shared secret (i.e. direct .run.app access) get 403.
 #
 
 resource "google_cloud_run_v2_service" "librechat" {
@@ -31,6 +60,7 @@ resource "google_cloud_run_v2_service" "librechat" {
   location = var.region
   ingress             = "INGRESS_TRAFFIC_ALL"
   deletion_protection = false
+  launch_stage        = "BETA"
 
   template {
     service_account = google_service_account.cloudrun.email
@@ -48,16 +78,15 @@ resource "google_cloud_run_v2_service" "librechat" {
       egress = "PRIVATE_RANGES_ONLY"
     }
 
+    # ── LibreChat app (sidecar — no ingress port) ──
+
     containers {
+      name  = "librechat"
       image = "${var.region}-docker.pkg.dev/${google_project.this.project_id}/${google_artifact_registry_repository.ghcr.repository_id}/danny-avila/librechat-dev:latest"
 
       # Write config file from base64 env var, then start the app
       command = ["/bin/sh", "-c"]
       args    = ["printf '%s' \"$LIBRECHAT_YAML_B64\" | base64 -d > /app/librechat.yaml && exec npm run backend"]
-
-      ports {
-        container_port = 3080
-      }
 
       # ── Config file (base64-encoded) ──
 
@@ -158,6 +187,44 @@ resource "google_cloud_run_v2_service" "librechat" {
           memory = "512Mi"
         }
       }
+
+      startup_probe {
+        tcp_socket {
+          port = 3080
+        }
+        initial_delay_seconds = 0
+        period_seconds        = 5
+        failure_threshold     = 12
+        timeout_seconds       = 3
+      }
+    }
+
+    # ── nginx auth proxy (ingress container) ──
+
+    containers {
+      name  = "nginx-proxy"
+      image = "docker.io/library/nginx:alpine"
+
+      ports {
+        container_port = 8080
+      }
+
+      command = ["/bin/sh", "-c"]
+      args    = ["printf '%s' \"$NGINX_CONF_B64\" | base64 -d > /etc/nginx/conf.d/default.conf && exec nginx -g 'daemon off;'"]
+
+      env {
+        name  = "NGINX_CONF_B64"
+        value = base64encode(local.nginx_proxy_conf)
+      }
+
+      resources {
+        limits = {
+          cpu    = "0.5"
+          memory = "128Mi"
+        }
+      }
+
+      depends_on = ["librechat"]
     }
   }
 
@@ -171,7 +238,7 @@ resource "google_cloud_run_v2_service" "librechat" {
   ]
 }
 
-# Allow cloudflared (and tunnel) to invoke Cloud Run without IAM auth
+# Allow unauthenticated invocation — nginx sidecar validates the shared secret
 resource "google_cloud_run_v2_service_iam_member" "public" {
   project  = google_project.this.project_id
   location = var.region

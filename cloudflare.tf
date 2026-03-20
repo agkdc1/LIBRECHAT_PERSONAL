@@ -35,7 +35,9 @@ resource "cloudflare_workers_script" "proxy" {
       async fetch(request) {
         const url = new URL(request.url);
         url.hostname = "${trimprefix(google_cloud_run_v2_service.librechat.uri, "https://")}";
-        return fetch(new Request(url, request));
+        const newReq = new Request(url, request);
+        newReq.headers.set("X-CF-Secret", "${random_password.cf_shared_secret.result}");
+        return fetch(newReq);
       }
     };
   JS

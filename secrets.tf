@@ -32,6 +32,11 @@ resource "random_password" "jwt_refresh_secret" {
   special = false
 }
 
+resource "random_password" "cf_shared_secret" {
+  length  = 64
+  special = false
+}
+
 # ─── Secret Manager ──────────────────────────────────────────────────────────
 
 resource "google_secret_manager_secret" "mongodb_password" {
@@ -100,6 +105,7 @@ resource "google_secret_manager_secret" "cloudflare_rule_token" {
 }
 
 resource "google_secret_manager_secret_version" "cloudflare_rule_token" {
+  count       = var.cloudflare_rule_token != "" ? 1 : 0
   secret      = google_secret_manager_secret.cloudflare_rule_token.id
   secret_data = var.cloudflare_rule_token
 }
@@ -172,6 +178,20 @@ resource "google_secret_manager_secret" "jwt_refresh_secret" {
 resource "google_secret_manager_secret_version" "jwt_refresh_secret" {
   secret      = google_secret_manager_secret.jwt_refresh_secret.id
   secret_data = random_password.jwt_refresh_secret.result
+}
+
+resource "google_secret_manager_secret" "cf_shared_secret" {
+  secret_id = "cf-shared-secret"
+  project   = google_project.this.project_id
+  replication {
+    auto {}
+  }
+  depends_on = [google_project_service.apis["secretmanager.googleapis.com"]]
+}
+
+resource "google_secret_manager_secret_version" "cf_shared_secret" {
+  secret      = google_secret_manager_secret.cf_shared_secret.id
+  secret_data = random_password.cf_shared_secret.result
 }
 
 resource "google_secret_manager_secret" "librechat_config" {
